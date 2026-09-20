@@ -60,11 +60,11 @@ local titleBar = create("Frame", {
 create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = titleBar })
 
 create("TextLabel", {
-	Size = UDim2.new(0, 90, 1, 0),
+	Size = UDim2.new(0, 80, 1, 0),
 	Position = UDim2.new(0, 10, 0, 0),
 	BackgroundTransparency = 1,
 	TextColor3 = Color3.fromRGB(255, 255, 255),
-	TextSize = 15,
+	TextSize: 15,
 	Font = Enum.Font.SourceSansBold,
 	TextXAlignment = Enum.TextXAlignment.Left,
 	Text = "Rohack Hun",
@@ -73,8 +73,8 @@ create("TextLabel", {
 
 -- [소] 버튼
 local smallBtn = create("TextButton", {
-	Size = UDim2.new(0, 26, 0, 26),
-	Position = UDim2.new(1, -112, 0.5, -13),
+	Size = UDim2.new(0, 22, 0, 26),
+	Position = UDim2.new(1, -135, 0.5, -13),
 	BackgroundColor3 = Color3.fromRGB(150, 30, 30),
 	TextColor3 = Color3.fromRGB(255, 255, 255),
 	TextSize = 11,
@@ -82,12 +82,12 @@ local smallBtn = create("TextButton", {
 	Text = "소",
 	Parent = titleBar
 })
-create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = smallBtn })
+create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = smallBtn })
 
 -- [중] 버튼
 local normalBtn = create("TextButton", {
-	Size = UDim2.new(0, 26, 0, 26),
-	Position = UDim2.new(1, -84, 0.5, -13),
+	Size = UDim2.new(0, 22, 0, 26),
+	Position = UDim2.new(1, -110, 0.5, -13),
 	BackgroundColor3 = Color3.fromRGB(180, 40, 40),
 	TextColor3 = Color3.fromRGB(255, 255, 255),
 	TextSize = 11,
@@ -95,12 +95,12 @@ local normalBtn = create("TextButton", {
 	Text = "중",
 	Parent = titleBar
 })
-create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = normalBtn })
+create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = normalBtn })
 
 -- [대] 버튼
 local largeBtn = create("TextButton", {
-	Size = UDim2.new(0, 26, 0, 26),
-	Position = UDim2.new(1, -56, 0.5, -13),
+	Size = UDim2.new(0, 22, 0, 26),
+	Position = UDim2.new(1, -85, 0.5, -13),
 	BackgroundColor3 = Color3.fromRGB(150, 30, 30),
 	TextColor3 = Color3.fromRGB(255, 255, 255),
 	TextSize = 11,
@@ -108,12 +108,12 @@ local largeBtn = create("TextButton", {
 	Text = "대",
 	Parent = titleBar
 })
-create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = largeBtn })
+create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = largeBtn })
 
 -- 접기/펴기 최소화 버튼 (-)
 local minimizeBtn = create("TextButton", {
-	Size = UDim2.new(0, 24, 0, 26),
-	Position = UDim2.new(1, -28, 0.5, -13),
+	Size = UDim2.new(0, 22, 0, 26),
+	Position = UDim2.new(1, -55, 0.5, -13),
 	BackgroundColor3 = Color3.fromRGB(120, 25, 25),
 	TextColor3 = Color3.fromRGB(255, 255, 255),
 	TextSize = 12,
@@ -121,7 +121,20 @@ local minimizeBtn = create("TextButton", {
 	Text = "—",
 	Parent = titleBar
 })
-create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = minimizeBtn })
+create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = minimizeBtn })
+
+-- 닫기 버튼 (X)
+local closeBtn = create("TextButton", {
+	Size = UDim2.new(0, 24, 0, 26),
+	Position = UDim2.new(1, -28, 0.5, -13),
+	BackgroundColor3 = Color3.fromRGB(180, 30, 30),
+	TextColor3 = Color3.fromRGB(255, 255, 255),
+	TextSize = 13,
+	Font = Enum.Font.SourceSansBold,
+	Text = "✕",
+	Parent = titleBar
+})
+create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = closeBtn })
 
 -- 내부 콘텐츠 프레임
 local contentFrame = create("Frame", {
@@ -518,6 +531,13 @@ end)
 pathToggleBtn.MouseButton1Click:Connect(function()
 	pathEnabled = not pathEnabled
 	updatePathUI()
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+	clearESP()
+	clearPathLine()
+	if renderConnection then renderConnection:Disconnect() end
+	screenGui.Enabled = false
 end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
