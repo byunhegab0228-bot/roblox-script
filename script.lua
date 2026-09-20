@@ -12,7 +12,7 @@ local espEnabled = false
 local aimbotEnabled = false
 local pathEnabled = false
 local isMinimized = false
-local sizeState = 1 -- 1: 보통, 2: 크게, 3: 작게
+local currentHeight = 380
 
 local playerList = {}
 local targetIndex = 1
@@ -60,7 +60,7 @@ local titleBar = create("Frame", {
 create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = titleBar })
 
 create("TextLabel", {
-	Size = UDim2.new(0, 120, 1, 0),
+	Size = UDim2.new(0, 100, 1, 0),
 	Position = UDim2.new(0, 12, 0, 0),
 	BackgroundTransparency = 1,
 	TextColor3 = Color3.fromRGB(255, 255, 255),
@@ -71,42 +71,57 @@ create("TextLabel", {
 	Parent = titleBar
 })
 
--- 크기 변경 버튼 (상단 우측 배치: [작게] ↔ [보통] ↔ [크게])
-local sizeToggleBtn = create("TextButton", {
-	Size = UDim2.new(0, 42, 0, 28),
-	Position = UDim2.new(1, -102, 0.5, -14),
-	BackgroundColor3 = Color3.fromRGB(180, 40, 40),
+-- [작게] 버튼
+local smallBtn = create("TextButton", {
+	Size = UDim2.new(0, 32, 0, 26),
+	Position = UDim2.new(1, -132, 0.5, -13),
+	BackgroundColor3 = Color3.fromRGB(150, 30, 30),
 	TextColor3 = Color3.fromRGB(255, 255, 255),
-	TextSize = 12,
+	TextSize = 11,
 	Font = Enum.Font.SourceSansBold,
-	Text = "크게",
+	Text = "소",
 	Parent = titleBar
 })
-create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = sizeToggleBtn })
+create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = smallBtn })
+
+-- [보통] 버튼
+local normalBtn = create("TextButton", {
+	Size = UDim2.new(0, 32, 0, 26),
+	Position = UDim2.new(1, -96, 0.5, -13),
+	BackgroundColor3 = Color3.fromRGB(180, 40, 40),
+	TextColor3 = Color3.fromRGB(255, 255, 255),
+	TextSize = 11,
+	Font = Enum.Font.SourceSansBold,
+	Text = "중",
+	Parent = titleBar
+})
+create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = normalBtn })
+
+-- [크게] 버튼
+local largeBtn = create("TextButton", {
+	Size = UDim2.new(0, 32, 0, 26),
+	Position = UDim2.new(1, -60, 0.5, -13),
+	BackgroundColor3 = Color3.fromRGB(150, 30, 30),
+	TextColor3 = Color3.fromRGB(255, 255, 255),
+	TextSize = 11,
+	Font = Enum.Font.SourceSansBold,
+	Text = "대",
+	Parent = titleBar
+})
+create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = largeBtn })
 
 -- 접기/펴기 최소화 버튼 (-)
 local minimizeBtn = create("TextButton", {
-	Size = UDim2.new(0, 28, 0, 28),
-	Position = UDim2.new(1, -56, 0.5, -14),
-	BackgroundColor3 = Color3.fromRGB(180, 40, 40),
+	Size = UDim2.new(0, 26, 0, 26),
+	Position = UDim2.new(1, -24, 0.5, -13),
+	BackgroundColor3 = Color3.fromRGB(120, 25, 25),
 	TextColor3 = Color3.fromRGB(255, 255, 255),
-	TextSize = 14,
+	TextSize = 13,
 	Font = Enum.Font.SourceSansBold,
 	Text = "—",
 	Parent = titleBar
 })
-create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = minimizeBtn })
-
--- 닫기 버튼 (✕)
-local closeBtn = create("TextButton", {
-	Size = UDim2.new(0, 28, 0, 28),
-	Position = UDim2.new(1, -24, 0.5, -14),
-	BackgroundColor3 = Color3.fromRGB(150, 30, 30),
-	TextColor3 = Color3.fromRGB(255, 255, 255),
-	Text = "✕",
-	Parent = titleBar
-})
-create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = closeBtn })
+create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = minimizeBtn })
 
 -- 내부 콘텐츠 프레임
 local contentFrame = create("Frame", {
@@ -220,7 +235,7 @@ create("TextLabel", {
 	Parent = contentFrame
 })
 
--- 우측 하단 구석 제작자 크레딧 텍스트
+-- 우측 하단 크레딧 텍스트
 create("TextLabel", {
 	Size = UDim2.new(1, -20, 0, 20),
 	Position = UDim2.new(0, 10, 1, -25),
@@ -233,24 +248,43 @@ create("TextLabel", {
 	Parent = contentFrame
 })
 
--- 크기 변경 버튼 기능 (작게 ↔ 보통 ↔ 크게 순환)
-local sizes = {
-	{w = 280, h = 380, name = "크게"},  -- 보통 상태일 때 누르면 크게로 감
-	{w = 400, h = 500, name = "작게"},  -- 크게 상태일 때 누르면 작게로 감
-	{w = 240, h = 320, name = "보통"}   -- 작게 상태일 때 누르면 보통으로 감
-}
-local currentHeight = 380
+-- 버튼 색상 업데이트 함수
+local function updateSizeButtonColors(activeBtn)
+	smallBtn.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
+	normalBtn.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
+	largeBtn.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
+	activeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+end
 
-sizeToggleBtn.MouseButton1Click:Connect(function()
-	sizeState = sizeState % 3 + 1
-	local info = sizes[sizeState]
-	sizeToggleBtn.Text = info.name
-	currentHeight = info.h
-	
+-- [소] 버튼 클릭 (작게: 240x320)
+smallBtn.MouseButton1Click:Connect(function()
+	currentHeight = 320
+	updateSizeButtonColors(smallBtn)
 	if not isMinimized then
-		mainFrame.Size = UDim2.new(0, info.w, 0, info.h)
+		mainFrame.Size = UDim2.new(0, 240, 0, 320)
 	end
 end)
+
+-- [중] 버튼 클릭 (보통: 280x380)
+normalBtn.MouseButton1Click:Connect(function()
+	currentHeight = 380
+	updateSizeButtonColors(normalBtn)
+	if not isMinimized then
+		mainFrame.Size = UDim2.new(0, 280, 0, 380)
+	end
+end)
+
+-- [대] 버튼 클릭 (크게: 400x500)
+largeBtn.MouseButton1Click:Connect(function()
+	currentHeight = 500
+	updateSizeButtonColors(largeBtn)
+	if not isMinimized then
+		mainFrame.Size = UDim2.new(0, 400, 0, 500)
+	end
+end)
+
+-- 초기 보통 버튼 강조
+updateSizeButtonColors(normalBtn)
 
 -- 접기/펴기 기능 토글 함수
 local function toggleMinimize()
@@ -393,7 +427,6 @@ local function isBlocked(startPos, endPos, myChar, tChar)
 	return result ~= nil
 end
 
--- UI 상태 업데이트 편의 함수들
 local function updateAimbotUI()
 	aimbotToggleBtn.Text = aimbotEnabled and "에임핵 [G] : 켜짐 (ON)" or "에임핵 [G] : 꺼짐 (OFF)"
 	aimbotToggleBtn.BackgroundColor3 = aimbotEnabled and Color3.fromRGB(220, 50, 50) or Color3.fromRGB(50, 52, 60)
@@ -412,12 +445,10 @@ renderConnection = RunService.RenderStepped:Connect(function()
 	local tChar = targetPlayer and targetPlayer.Character
 	local tHead = tChar and tChar:FindFirstChild("Head")
 
-	-- 에임핵 (머리 자동 조준)
 	if aimbotEnabled and tHead then
 		camera.CFrame = CFrame.new(camera.CFrame.Position, tHead.Position)
 	end
 
-	-- 길 안내 로직
 	if pathEnabled and myHrp and tHead then
 		local startPos = myHrp.Position
 		local targetPos = tHead.Position
@@ -496,7 +527,6 @@ closeBtn.MouseButton1Click:Connect(function()
 	screenGui.Enabled = false
 end)
 
--- PC 단축키 기능 (F: 패널 토글, G: 에임핵, H: ESP, J: 길안내)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 	
@@ -534,7 +564,7 @@ end)
 
 updatePlayerList()
 
--- UI 드래그 처리 (패널 이동)
+-- UI 드래그 처리
 local dragging, dragStart, startPos
 titleBar.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
