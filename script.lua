@@ -64,7 +64,7 @@ create("TextLabel", {
 	Position = UDim2.new(0, 10, 0, 0),
 	BackgroundTransparency = 1,
 	TextColor3 = Color3.fromRGB(255, 255, 255),
-	TextSize: 15,
+	TextSize = 15, -- [수정완료] 등호(=)로 변경됨
 	Font = Enum.Font.SourceSansBold,
 	TextXAlignment = Enum.TextXAlignment.Left,
 	Text = "Rohack Hun",
@@ -598,3 +598,4 @@ titleBar.InputChanged:Connect(function(input)
 		mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 	end
 end)
+
