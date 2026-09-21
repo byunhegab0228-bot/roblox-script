@@ -1,38 +1,33 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
-local PathfindingService = game:GetService("PathfindingService")
 local UserInputService = game:GetService("UserInputService")
+local PathfindingService = game:GetService("PathfindingService")
+
+if not game:IsLoaded() then game.Loaded:Wait() end
 
 local localPlayer = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 
--- 상태 변수
 local espEnabled = false
 local aimbotEnabled = false
 local pathEnabled = false
-local isMinimized = false
-local currentHeight = 380
+local selectionModeEnabled = false
 
 local playerList = {}
 local targetIndex = 1
 local targetPlayer = nil
-
--- 저장소
-local espFolder = nil
-local renderConnection = nil
+local pendingTargetPlayer = nil
 local pathFolder = nil
 local lastPathTime = 0
-local characterConnections = {}
 
--- UI 생성 도우미 함수
+-- UI 생성 함수
 local function create(className, props)
 	local inst = Instance.new(className)
 	for k, v in pairs(props) do inst[k] = v end
 	return inst
 end
 
--- 1. UI 구조 생성
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 local existing = playerGui:FindFirstChild("AdminTargetGui")
 if existing then existing:Destroy() end
@@ -50,7 +45,7 @@ local mainFrame = create("Frame", {
 })
 create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = mainFrame })
 
--- 상단 타이틀바 (Rohack Hun)
+-- 상단 타이틀바
 local titleBar = create("Frame", {
 	Size = UDim2.new(1, 0, 0, 45),
 	BackgroundColor3 = Color3.fromRGB(220, 50, 50),
@@ -60,73 +55,57 @@ local titleBar = create("Frame", {
 create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = titleBar })
 
 create("TextLabel", {
-	Size = UDim2.new(0, 80, 1, 0),
+	Size = UDim2.new(0, 100, 1, 0),
 	Position = UDim2.new(0, 10, 0, 0),
 	BackgroundTransparency = 1,
 	TextColor3 = Color3.fromRGB(255, 255, 255),
-	TextSize = 15, -- [수정완료] 등호(=)로 변경됨
+	TextSize = 15,
 	Font = Enum.Font.SourceSansBold,
 	TextXAlignment = Enum.TextXAlignment.Left,
 	Text = "Rohack Hun",
 	Parent = titleBar
 })
 
--- [소] 버튼
-local smallBtn = create("TextButton", {
-	Size = UDim2.new(0, 22, 0, 26),
-	Position = UDim2.new(1, -135, 0.5, -13),
-	BackgroundColor3 = Color3.fromRGB(150, 30, 30),
+-- 소, 중, 대 크기 조절 버튼 추가
+local sizeSmallBtn = create("TextButton", {
+	Size = UDim2.new(0, 20, 0, 24),
+	Position = UDim2.new(1, -108, 0.5, -12),
+	BackgroundColor3 = Color3.fromRGB(150, 35, 35),
 	TextColor3 = Color3.fromRGB(255, 255, 255),
 	TextSize = 11,
 	Font = Enum.Font.SourceSansBold,
 	Text = "소",
 	Parent = titleBar
 })
-create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = smallBtn })
+create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = sizeSmallBtn })
 
--- [중] 버튼
-local normalBtn = create("TextButton", {
-	Size = UDim2.new(0, 22, 0, 26),
-	Position = UDim2.new(1, -110, 0.5, -13),
-	BackgroundColor3 = Color3.fromRGB(180, 40, 40),
+local sizeMidBtn = create("TextButton", {
+	Size = UDim2.new(0, 20, 0, 24),
+	Position = UDim2.new(1, -84, 0.5, -12),
+	BackgroundColor3 = Color3.fromRGB(150, 35, 35),
 	TextColor3 = Color3.fromRGB(255, 255, 255),
 	TextSize = 11,
 	Font = Enum.Font.SourceSansBold,
 	Text = "중",
 	Parent = titleBar
 })
-create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = normalBtn })
+create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = sizeMidBtn })
 
--- [대] 버튼
-local largeBtn = create("TextButton", {
-	Size = UDim2.new(0, 22, 0, 26),
-	Position = UDim2.new(1, -85, 0.5, -13),
-	BackgroundColor3 = Color3.fromRGB(150, 30, 30),
+local sizeLargeBtn = create("TextButton", {
+	Size = UDim2.new(0, 20, 0, 24),
+	Position = UDim2.new(1, -60, 0.5, -12),
+	BackgroundColor3 = Color3.fromRGB(150, 35, 35),
 	TextColor3 = Color3.fromRGB(255, 255, 255),
 	TextSize = 11,
 	Font = Enum.Font.SourceSansBold,
 	Text = "대",
 	Parent = titleBar
 })
-create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = largeBtn })
+create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = sizeLargeBtn })
 
--- 접기/펴기 최소화 버튼 (-)
-local minimizeBtn = create("TextButton", {
-	Size = UDim2.new(0, 22, 0, 26),
-	Position = UDim2.new(1, -55, 0.5, -13),
-	BackgroundColor3 = Color3.fromRGB(120, 25, 25),
-	TextColor3 = Color3.fromRGB(255, 255, 255),
-	TextSize = 12,
-	Font = Enum.Font.SourceSansBold,
-	Text = "—",
-	Parent = titleBar
-})
-create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = minimizeBtn })
-
--- 닫기 버튼 (X)
 local closeBtn = create("TextButton", {
-	Size = UDim2.new(0, 24, 0, 26),
-	Position = UDim2.new(1, -28, 0.5, -13),
+	Size = UDim2.new(0, 24, 0, 24),
+	Position = UDim2.new(1, -30, 0.5, -12),
 	BackgroundColor3 = Color3.fromRGB(180, 30, 30),
 	TextColor3 = Color3.fromRGB(255, 255, 255),
 	TextSize = 13,
@@ -136,7 +115,20 @@ local closeBtn = create("TextButton", {
 })
 create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = closeBtn })
 
--- 내부 콘텐츠 프레임
+-- 크기 변경 로직
+sizeSmallBtn.MouseButton1Click:Connect(function()
+	mainFrame.Size = UDim2.new(0, 240, 0, 320)
+end)
+
+sizeMidBtn.MouseButton1Click:Connect(function()
+	mainFrame.Size = UDim2.new(0, 280, 0, 380)
+end)
+
+sizeLargeBtn.MouseButton1Click:Connect(function()
+	mainFrame.Size = UDim2.new(0, 340, 0, 460)
+end)
+
+-- 콘텐츠 프레임
 local contentFrame = create("Frame", {
 	Size = UDim2.new(1, 0, 1, -45),
 	Position = UDim2.new(0, 0, 0, 45),
@@ -144,7 +136,6 @@ local contentFrame = create("Frame", {
 	Parent = mainFrame
 })
 
--- 플레이어 선택 UI
 create("TextLabel", {
 	Size = UDim2.new(1, -20, 0, 20),
 	Position = UDim2.new(0, 10, 0, 12),
@@ -167,7 +158,6 @@ create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = selectorFrame })
 
 local prevBtn = create("TextButton", {
 	Size = UDim2.new(0, 35, 1, 0),
-	Position = UDim2.new(0, 0, 0, 0),
 	BackgroundTransparency = 1,
 	TextColor3 = Color3.fromRGB(255, 255, 255),
 	TextSize = 16,
@@ -181,7 +171,7 @@ local targetDisplay = create("TextLabel", {
 	Position = UDim2.new(0, 35, 0, 0),
 	BackgroundTransparency = 1,
 	TextColor3 = Color3.fromRGB(255, 255, 255),
-	TextSize = 14,
+	TextSize = 13,
 	Font = Enum.Font.SourceSansBold,
 	Text = "없음",
 	Parent = selectorFrame
@@ -198,25 +188,37 @@ local nextBtn = create("TextButton", {
 	Parent = selectorFrame
 })
 
--- 토글 버튼들
+-- 기능 버튼들
 local espToggleBtn = create("TextButton", {
-	Size = UDim2.new(1, -20, 0, 36),
-	Position = UDim2.new(0, 10, 0, 85),
+	Size = UDim2.new(1, -20, 0, 32),
+	Position = UDim2.new(0, 10, 0, 78),
 	BackgroundColor3 = Color3.fromRGB(50, 52, 60),
 	TextColor3 = Color3.fromRGB(255, 255, 255),
-	TextSize = 14,
+	TextSize = 13,
 	Font = Enum.Font.SourceSansBold,
 	Text = "ESP [H] : 꺼짐 (OFF)",
 	Parent = contentFrame
 })
 create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = espToggleBtn })
 
-local aimbotToggleBtn = create("TextButton", {
-	Size = UDim2.new(1, -20, 0, 36),
-	Position = UDim2.new(0, 10, 0, 130),
+local selectModeBtn = create("TextButton", {
+	Size = UDim2.new(1, -20, 0, 32),
+	Position = UDim2.new(0, 10, 0, 115),
 	BackgroundColor3 = Color3.fromRGB(50, 52, 60),
 	TextColor3 = Color3.fromRGB(255, 255, 255),
-	TextSize = 14,
+	TextSize = 13,
+	Font = Enum.Font.SourceSansBold,
+	Text = "선택 모드 (벽 뒤 타겟 클릭) : OFF",
+	Parent = contentFrame
+})
+create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = selectModeBtn })
+
+local aimbotToggleBtn = create("TextButton", {
+	Size = UDim2.new(1, -20, 0, 32),
+	Position = UDim2.new(0, 10, 0, 152),
+	BackgroundColor3 = Color3.fromRGB(50, 52, 60),
+	TextColor3 = Color3.fromRGB(255, 255, 255),
+	TextSize = 13,
 	Font = Enum.Font.SourceSansBold,
 	Text = "에임핵 [G] : 꺼짐 (OFF)",
 	Parent = contentFrame
@@ -224,21 +226,20 @@ local aimbotToggleBtn = create("TextButton", {
 create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = aimbotToggleBtn })
 
 local pathToggleBtn = create("TextButton", {
-	Size = UDim2.new(1, -20, 0, 36),
-	Position = UDim2.new(0, 10, 0, 175),
+	Size = UDim2.new(1, -20, 0, 32),
+	Position = UDim2.new(0, 10, 0, 189),
 	BackgroundColor3 = Color3.fromRGB(50, 52, 60),
 	TextColor3 = Color3.fromRGB(255, 255, 255),
-	TextSize = 14,
+	TextSize = 13,
 	Font = Enum.Font.SourceSansBold,
 	Text = "길 안내 [J] : 꺼짐 (OFF)",
 	Parent = contentFrame
 })
 create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = pathToggleBtn })
 
--- 단축키 안내 텍스트
 create("TextLabel", {
 	Size = UDim2.new(1, -20, 0, 35),
-	Position = UDim2.new(0, 10, 0, 220),
+	Position = UDim2.new(0, 10, 0, 226),
 	BackgroundTransparency = 1,
 	TextColor3 = Color3.fromRGB(150, 155, 165),
 	TextSize = 11,
@@ -248,96 +249,32 @@ create("TextLabel", {
 	Parent = contentFrame
 })
 
--- 우측 하단 크레딧 텍스트
-create("TextLabel", {
-	Size = UDim2.new(1, -20, 0, 20),
-	Position = UDim2.new(0, 10, 1, -25),
-	BackgroundTransparency = 1,
-	TextColor3 = Color3.fromRGB(120, 125, 135),
-	TextSize = 11,
-	Font = Enum.Font.SourceSans,
-	TextXAlignment = Enum.TextXAlignment.Right,
-	Text = "배포 가능 제작:로블 핵 배포",
-	Parent = contentFrame
+-- [OK?] 확정 버튼 GUI 생성
+local okGuiHolder = create("ScreenGui", { Name = "OkGuiHolder", ResetOnSpawn = false, Parent = playerGui })
+local okButton = create("TextButton", {
+	Name = "ConfirmOkButton",
+	Size = UDim2.new(0, 140, 0, 40),
+	Position = UDim2.new(0.5, -70, 0.15, 0),
+	BackgroundColor3 = Color3.fromRGB(40, 180, 60),
+	TextColor3 = Color3.fromRGB(255, 255, 255),
+	TextSize = 15,
+	Font = Enum.Font.SourceSansBold,
+	Text = "OK? (확정)",
+	Visible = false,
+	Parent = okGuiHolder
 })
+create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = okButton })
 
--- 버튼 색상 업데이트 함수
-local function updateSizeButtonColors(activeBtn)
-	smallBtn.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
-	normalBtn.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
-	largeBtn.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
-	activeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
-end
-
--- [소] 버튼 클릭 (작게: 240x320)
-smallBtn.MouseButton1Click:Connect(function()
-	currentHeight = 320
-	updateSizeButtonColors(smallBtn)
-	if not isMinimized then
-		mainFrame.Size = UDim2.new(0, 240, 0, 320)
-	end
-end)
-
--- [중] 버튼 클릭 (보통: 280x380)
-normalBtn.MouseButton1Click:Connect(function()
-	currentHeight = 380
-	updateSizeButtonColors(normalBtn)
-	if not isMinimized then
-		mainFrame.Size = UDim2.new(0, 280, 0, 380)
-	end
-end)
-
--- [대] 버튼 클릭 (크게: 400x500)
-largeBtn.MouseButton1Click:Connect(function()
-	currentHeight = 500
-	updateSizeButtonColors(largeBtn)
-	if not isMinimized then
-		mainFrame.Size = UDim2.new(0, 400, 0, 500)
-	end
-end)
-
--- 초기 보통 버튼 강조
-updateSizeButtonColors(normalBtn)
-
--- 접기/펴기 기능 토글 함수
-local function toggleMinimize()
-	isMinimized = not isMinimized
-	if isMinimized then
-		contentFrame.Visible = false
-		mainFrame.Size = UDim2.new(0, mainFrame.AbsoluteSize.X, 0, 45)
-		minimizeBtn.Text = "+"
-	else
-		contentFrame.Visible = true
-		mainFrame.Size = UDim2.new(0, mainFrame.AbsoluteSize.X, 0, currentHeight)
-		minimizeBtn.Text = "—"
-	end
-end
-
-minimizeBtn.MouseButton1Click:Connect(toggleMinimize)
-
--- 타이틀바 더블 클릭 접기/펴기 지원
-local lastClick = 0
-titleBar.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		if tick() - lastClick < 0.3 then
-			toggleMinimize()
-		end
-		lastClick = tick()
-	end
-end)
-
--- 2. 플레이어 목록 갱신 함수
+-- 플레이어 목록 업데이트
 local function updatePlayerList()
 	playerList = {}
 	for _, p in pairs(Players:GetPlayers()) do
-		if p ~= localPlayer then
-			table.insert(playerList, p)
-		end
+		if p ~= localPlayer then table.insert(playerList, p) end
 	end
 
 	if #playerList == 0 then
 		targetPlayer = nil
-		targetDisplay.Text = "없음 (플레이어 없음)"
+		targetDisplay.Text = "플레이어 없음"
 	else
 		if targetIndex > #playerList then targetIndex = 1 end
 		if targetIndex < 1 then targetIndex = #playerList end
@@ -346,71 +283,133 @@ local function updatePlayerList()
 	end
 end
 
--- 3. ESP 관련 함수
+-- ESP 관리
 local function clearESP()
-	if espFolder then espFolder:Destroy() espFolder = nil end
-	for _, conn in pairs(characterConnections) do
-		if conn then conn:Disconnect() end
-	end
-	characterConnections = {}
-end
-
-local function applyESPToCharacter(char)
-	if not char or not espEnabled then return end
-	local existingHighlight = char:FindFirstChild("CustomESP_Highlight")
-	if existingHighlight then existingHighlight:Destroy() end
-
-	local highlight = Instance.new("Highlight")
-	highlight.Name = "CustomESP_Highlight"
-	highlight.Adornee = char
-	highlight.FillColor = Color3.fromRGB(255, 50, 50)
-	highlight.FillTransparency = 0.5
-	highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-	highlight.Parent = char
-end
-
-local function updateESPUI()
-	espToggleBtn.Text = espEnabled and "ESP [H] : 켜짐 (ON)" or "ESP [H] : 꺼짐 (OFF)"
-	espToggleBtn.BackgroundColor3 = espEnabled and Color3.fromRGB(220, 50, 50) or Color3.fromRGB(50, 52, 60)
-end
-
-local function updateESP()
-	clearESP()
-	updateESPUI()
-	if not espEnabled then return end
-
-	espFolder = Instance.new("Folder", Workspace)
-	espFolder.Name = "ESPFolder"
-
 	for _, player in pairs(Players:GetPlayers()) do
-		if player ~= localPlayer then
-			if player.Character then
-				applyESPToCharacter(player.Character)
-			end
-			characterConnections[player] = player.CharacterAdded:Connect(function(newChar)
-				task.wait(0.5)
-				if espEnabled then
-					applyESPToCharacter(newChar)
-				end
-			end)
+		if player.Character then
+			local hl = player.Character:FindFirstChild("CustomESP_Highlight")
+			if hl then hl:Destroy() end
 		end
 	end
 end
 
--- 4. 길 안내 선 관리
-local function clearPathLine()
-	if pathFolder then
-		pathFolder:Destroy()
-		pathFolder = nil
+local function applyESPToCharacter(char, isSelected)
+	if not char then return end
+	local hl = char:FindFirstChild("CustomESP_Highlight")
+	if hl then hl:Destroy() end
+
+	hl = Instance.new("Highlight")
+	hl.Name = "CustomESP_Highlight"
+	hl.Adornee = char
+	hl.FillColor = isSelected and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(255, 50, 50)
+	hl.FillTransparency = 0.5
+	hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+	hl.Parent = char
+end
+
+local function updateESP()
+	if not espEnabled and not selectionModeEnabled then
+		clearESP()
+		return
 	end
+	for _, player in pairs(Players:GetPlayers()) do
+		if player ~= localPlayer and player.Character then
+			applyESPToCharacter(player.Character, selectionModeEnabled)
+		end
+	end
+end
+
+-- 선택 모드 토글
+local function setSelectionMode(state)
+	selectionModeEnabled = state
+	if selectionModeEnabled then
+		selectModeBtn.Text = "선택 모드 중... (벽 뒤 클릭 가능)"
+		selectModeBtn.BackgroundColor3 = Color3.fromRGB(220, 160, 30)
+		espEnabled = true
+		updateESP()
+	else
+		selectModeBtn.Text = "선택 모드 (벽 뒤 타겟 클릭) : OFF"
+		selectModeBtn.BackgroundColor3 = Color3.fromRGB(50, 52, 60)
+		okButton.Visible = false
+		pendingTargetPlayer = nil
+		if not espEnabled then
+			clearESP()
+		else
+			updateESP()
+		end
+	end
+	espToggleBtn.Text = espEnabled and "ESP [H] : 켜짐 (ON)" or "ESP [H] : 꺼짐 (OFF)"
+	espToggleBtn.BackgroundColor3 = espEnabled and Color3.fromRGB(220, 50, 50) or Color3.fromRGB(50, 52, 60)
+end
+
+selectModeBtn.MouseButton1Click:Connect(function()
+	setSelectionMode(not selectionModeEnabled)
+end)
+
+-- 벽 뒤 플레이어 마우스 조준 감지 레이캐스트 로직
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+		if selectionModeEnabled then
+			local mousePos = UserInputService:GetMouseLocation()
+			local unitRay = camera:ViewportPointToRay(mousePos.X, mousePos.Y)
+			local rayOrigin = unitRay.Origin
+			local rayDir = unitRay.Direction.Unit
+
+			local closestPlayer = nil
+			local shortestDistance = math.huge
+
+			for _, p in pairs(Players:GetPlayers()) do
+				if p ~= localPlayer and p.Character then
+					local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+					if hrp then
+						local playerPos = hrp.Position
+						local v = playerPos - rayOrigin
+						local projection = v:Dot(rayDir)
+						if projection > 0 then
+							local closestPoint = rayOrigin + rayDir * projection
+							local distFromRay = (playerPos - closestPoint).Magnitude
+							if distFromRay < 8 and projection < shortestDistance then
+								shortestDistance = projection
+								closestPlayer = p
+							end
+						end
+					end
+				end
+			end
+
+			if closestPlayer then
+				pendingTargetPlayer = closestPlayer
+				okButton.Visible = true
+				okButton.Text = "OK? (" .. closestPlayer.DisplayName .. ")"
+			end
+		end
+	end
+end)
+
+okButton.MouseButton1Click:Connect(function()
+	if pendingTargetPlayer then
+		targetPlayer = pendingTargetPlayer
+		targetDisplay.Text = targetPlayer.DisplayName .. " (@" .. targetPlayer.Name .. ")"
+		for i, p in ipairs(playerList) do
+			if p == targetPlayer then
+				targetIndex = i
+				break
+			end
+		end
+	end
+	setSelectionMode(false)
+end)
+
+-- 길 안내 유틸
+local function clearPathLine()
+	if pathFolder then pathFolder:Destroy() pathFolder = nil end
 end
 
 local function drawSegment(p1, p2)
 	if not pathFolder then
-		pathFolder = Instance.new("Folder", Workspace.Terrain)
+		pathFolder = Instance.new("Folder", Workspace)
 		pathFolder.Name = "PathFolder"
 	end
-
 	local att0 = Instance.new("Attachment", Workspace.Terrain)
 	local att1 = Instance.new("Attachment", Workspace.Terrain)
 	att0.WorldPosition = p1
@@ -420,8 +419,8 @@ local function drawSegment(p1, p2)
 	beam.Attachment0 = att0
 	beam.Attachment1 = att1
 	beam.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0))
-	beam.Width0 = 0.08
-	beam.Width1 = 0.08
+	beam.Width0 = 0.1
+	beam.Width1 = 0.1
 	beam.FaceCamera = true
 	beam.Parent = pathFolder
 
@@ -429,32 +428,10 @@ local function drawSegment(p1, p2)
 	att1.Parent = pathFolder
 end
 
-local function isBlocked(startPos, endPos, myChar, tChar)
-	local rayParams = RaycastParams.new()
-	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	rayParams.FilterDescendantsInstances = {myChar, tChar}
-
-	local direction = endPos - startPos
-	local result = Workspace:Raycast(startPos, direction, rayParams)
-
-	return result ~= nil
-end
-
-local function updateAimbotUI()
-	aimbotToggleBtn.Text = aimbotEnabled and "에임핵 [G] : 켜짐 (ON)" or "에임핵 [G] : 꺼짐 (OFF)"
-	aimbotToggleBtn.BackgroundColor3 = aimbotEnabled and Color3.fromRGB(220, 50, 50) or Color3.fromRGB(50, 52, 60)
-end
-
-local function updatePathUI()
-	pathToggleBtn.Text = pathEnabled and "길 안내 [J] : 켜짐 (ON)" or "길 안내 [J] : 꺼짐 (OFF)"
-	pathToggleBtn.BackgroundColor3 = pathEnabled and Color3.fromRGB(220, 50, 50) or Color3.fromRGB(50, 52, 60)
-end
-
--- 5. 프레임 연산 (실시간 트래킹)
-renderConnection = RunService.RenderStepped:Connect(function()
+-- 렌더링 루프
+RunService.RenderStepped:Connect(function()
 	local myChar = localPlayer.Character
 	local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-
 	local tChar = targetPlayer and targetPlayer.Character
 	local tHead = tChar and tChar:FindFirstChild("Head")
 
@@ -463,139 +440,96 @@ renderConnection = RunService.RenderStepped:Connect(function()
 	end
 
 	if pathEnabled and myHrp and tHead then
-		local startPos = myHrp.Position
-		local targetPos = tHead.Position
-
-		local blocked = isBlocked(startPos, targetPos, myChar, tChar)
-
-		if not blocked then
+		if tick() - lastPathTime > 0.5 then
+			lastPathTime = tick()
 			clearPathLine()
-			drawSegment(startPos, targetPos)
-		else
-			if tick() - lastPathTime > 0.3 then
-				lastPathTime = tick()
-				clearPathLine()
-
-				local path = PathfindingService:CreatePath({
-					AgentRadius = 2,
-					AgentHeight = 5,
-					AgentCanJump = true
-				})
-
-				pcall(function()
-					path:ComputeAsync(startPos, targetPos)
-					if path.Status == Enum.PathStatus.Success then
-						local waypoints = path:GetWaypoints()
-						for i = 1, #waypoints - 1 do
-							local p1 = waypoints[i].Position + Vector3.new(0, 1, 0)
-							local p2 = waypoints[i+1].Position + Vector3.new(0, 1, 0)
-							drawSegment(p1, p2)
-						end
-						if #waypoints > 0 then
-							drawSegment(waypoints[#waypoints].Position + Vector3.new(0, 1, 0), targetPos)
-						end
-					else
-						drawSegment(startPos, targetPos)
+			local path = PathfindingService:CreatePath({ AgentRadius = 2, AgentHeight = 5, AgentCanJump = true })
+			pcall(function()
+				path:ComputeAsync(myHrp.Position, tHead.Position)
+				if path.Status == Enum.PathStatus.Success then
+					local waypoints = path:GetWaypoints()
+					for i = 1, #waypoints - 1 do
+						drawSegment(waypoints[i].Position + Vector3.new(0, 1, 0), waypoints[i+1].Position + Vector3.new(0, 1, 0))
 					end
-				end)
-			end
+				end
+			end)
 		end
 	else
 		clearPathLine()
 	end
 end)
 
--- 6. 버튼 및 단축키 이벤트 연결
+-- 버튼 이벤트 연결
 prevBtn.MouseButton1Click:Connect(function()
 	targetIndex = targetIndex - 1
 	updatePlayerList()
-	clearPathLine()
 end)
 
 nextBtn.MouseButton1Click:Connect(function()
 	targetIndex = targetIndex + 1
 	updatePlayerList()
-	clearPathLine()
 end)
 
 espToggleBtn.MouseButton1Click:Connect(function()
 	espEnabled = not espEnabled
+	espToggleBtn.Text = espEnabled and "ESP [H] : 켜짐 (ON)" or "ESP [H] : 꺼짐 (OFF)"
+	espToggleBtn.BackgroundColor3 = espEnabled and Color3.fromRGB(220, 50, 50) or Color3.fromRGB(50, 52, 60)
 	updateESP()
 end)
 
 aimbotToggleBtn.MouseButton1Click:Connect(function()
 	aimbotEnabled = not aimbotEnabled
-	updateAimbotUI()
+	aimbotToggleBtn.Text = aimbotEnabled and "에임핵 [G] : 켜짐 (ON)" or "에임핵 [G] : 꺼짐 (OFF)"
+	aimbotToggleBtn.BackgroundColor3 = aimbotEnabled and Color3.fromRGB(220, 50, 50) or Color3.fromRGB(50, 52, 60)
 end)
 
 pathToggleBtn.MouseButton1Click:Connect(function()
 	pathEnabled = not pathEnabled
-	updatePathUI()
+	pathToggleBtn.Text = pathEnabled and "길 안내 [J] : 켜짐 (ON)" or "길 안내 [J] : 꺼짐 (OFF)"
+	pathToggleBtn.BackgroundColor3 = pathEnabled and Color3.fromRGB(220, 50, 50) or Color3.fromRGB(50, 52, 60)
 end)
 
 closeBtn.MouseButton1Click:Connect(function()
 	clearESP()
 	clearPathLine()
-	if renderConnection then renderConnection:Disconnect() end
 	screenGui.Enabled = false
+	okGuiHolder.Enabled = false
 end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
-	
 	if input.KeyCode == Enum.KeyCode.F then
 		screenGui.Enabled = not screenGui.Enabled
 	elseif input.KeyCode == Enum.KeyCode.G then
-		aimbotEnabled = not aimbotEnabled
-		updateAimbotUI()
+		aimbotToggleBtn.MouseButton1Click:Fire()
 	elseif input.KeyCode == Enum.KeyCode.H then
-		espEnabled = not espEnabled
-		updateESP()
+		espToggleBtn.MouseButton1Click:Fire()
 	elseif input.KeyCode == Enum.KeyCode.J then
-		pathEnabled = not pathEnabled
-		updatePathUI()
+		pathToggleBtn.MouseButton1Click:Fire()
 	end
 end)
 
-Players.PlayerAdded:Connect(function(player)
-	updatePlayerList()
-	characterConnections[player] = player.CharacterAdded:Connect(function(newChar)
-		task.wait(0.5)
-		if espEnabled then
-			applyESPToCharacter(newChar)
-		end
-	end)
-end)
-
-Players.PlayerRemoving:Connect(function(player)
-	if characterConnections[player] then
-		characterConnections[player]:Disconnect()
-		characterConnections[player] = nil
-	end
-	updatePlayerList()
-end)
-
+Players.PlayerAdded:Connect(updatePlayerList)
+Players.PlayerRemoving:Connect(updatePlayerList)
 updatePlayerList()
 
--- UI 드래그 처리
+-- UI 드래그 이동 기능
 local dragging, dragStart, startPos
 titleBar.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		dragging, dragStart, startPos = true, input.Position, mainFrame.Position
-		local c
-		c = input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-				if c then c:Disconnect() end
-			end
-		end)
 	end
 end)
 
-titleBar.InputChanged:Connect(function(input)
+UserInputService.InputChanged:Connect(function(input)
 	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 		local delta = input.Position - dragStart
 		mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 	end
 end)
 
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = false
+	end
+end)
